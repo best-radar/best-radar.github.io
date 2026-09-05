@@ -65,7 +65,8 @@
 
   /** @type {Array<any>} */
   let repos = [];
-  let activeCategory = "all";
+  /** @type {Map<string, string>} lowercase key -> display label */
+  let activeCategories = new Map();
   let activeLanguage = "all";
   let currentPage = 1;
 
@@ -311,9 +312,9 @@
     els.categorySearch.setAttribute("aria-expanded", "true");
   }
 
-  function setCategory(value, { resetPage = true } = {}) {
-    activeCategory = value || "all";
-    if (els.categoryClear) els.categoryClear.hidden = activeCategory === "all";
+  function clearCategories({ resetPage = true } = {}) {
+    activeCategories.clear();
+    if (els.categoryClear) els.categoryClear.hidden = true;
     if (els.categorySearch && document.activeElement !== els.categorySearch) {
       els.categorySearch.value = "";
     }
@@ -322,21 +323,46 @@
     applyFilter({ resetPage });
   }
 
+  function toggleCategory(value, { resetPage = true, keepMenuOpen = true } = {}) {
+    if (!value || value === "all") {
+      clearCategories({ resetPage });
+      return;
+    }
+    const key = String(value).toLowerCase();
+    if (activeCategories.has(key)) activeCategories.delete(key);
+    else activeCategories.set(key, value);
+
+    if (els.categoryClear) els.categoryClear.hidden = activeCategories.size === 0;
+    if (els.categorySearch) els.categorySearch.value = "";
+    renderCategoryActive();
+    if (keepMenuOpen) openCategoryMenu();
+    else closeCategoryMenu();
+    applyFilter({ resetPage });
+  }
+
   function renderCategoryActive() {
     if (!els.categoryActive) return;
     els.categoryActive.innerHTML = "";
-    if (activeCategory === "all") return;
-    const pill = document.createElement("span");
-    pill.className = "cat-pill";
-    const label = activeCategory.startsWith("#") ? activeCategory : `#${activeCategory}`;
-    pill.innerHTML = `<span>${escapeHtml(label)}</span>`;
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.setAttribute("aria-label", "Сбросить категорию");
-    btn.textContent = "×";
-    btn.addEventListener("click", () => setCategory("all"));
-    pill.appendChild(btn);
-    els.categoryActive.appendChild(pill);
+    if (!activeCategories.size) return;
+
+    for (const [key, label] of activeCategories) {
+      const pill = document.createElement("span");
+      pill.className = "cat-pill";
+      const text = label.startsWith("#") ? label : `#${label}`;
+      const span = document.createElement("span");
+      span.textContent = text;
+      pill.appendChild(span);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("aria-label", `Убрать ${text}`);
+      btn.textContent = "×";
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleCategory(label, { keepMenuOpen: false });
+      });
+      pill.appendChild(btn);
+      els.categoryActive.appendChild(pill);
+    }
   }
 
   function filteredCategoryOptions() {
@@ -354,11 +380,11 @@
     const allLi = document.createElement("li");
     allLi.setAttribute("role", "option");
     allLi.dataset.value = "all";
-    allLi.textContent = "Все категории";
-    if (activeCategory === "all") allLi.classList.add("is-active");
+    allLi.textContent = "Сбросить всё";
+    if (!activeCategories.size) allLi.classList.add("is-active");
     allLi.addEventListener("mousedown", (e) => {
       e.preventDefault();
-      setCategory("all");
+      clearCategories();
     });
     els.categoryMenu.appendChild(allLi);
 
@@ -374,12 +400,14 @@
       const li = document.createElement("li");
       li.setAttribute("role", "option");
       li.dataset.value = value;
-      li.textContent = value.startsWith("#") ? value : `#${value}`;
-      if (activeCategory.toLowerCase() === value.toLowerCase()) li.classList.add("is-active");
-      if (idx === categoryMenuIndex) li.classList.add("is-active");
+      const selected = activeCategories.has(value.toLowerCase());
+      const label = value.startsWith("#") ? value : `#${value}`;
+      li.innerHTML = `<span class="cat-option-check" aria-hidden="true">${selected ? "✓" : ""}</span><span>${escapeHtml(label)}</span>`;
+      if (selected) li.classList.add("is-selected");
+      if (idx + 1 === categoryMenuIndex) li.classList.add("is-active");
       li.addEventListener("mousedown", (e) => {
         e.preventDefault();
-        setCategory(value);
+        toggleCategory(value, { keepMenuOpen: true });
       });
       els.categoryMenu.appendChild(li);
     });
@@ -394,11 +422,12 @@
       openCategoryMenu();
     });
     els.categorySearch.addEventListener("keydown", (e) => {
-      const items = [...els.categoryMenu.querySelectorAll('[role="option"]')];
+      const opts = filteredCategoryOptions();
+      const maxIdx = opts.length; // 0 = reset, 1..n = options
       if (e.key === "ArrowDown") {
         e.preventDefault();
         openCategoryMenu();
-        categoryMenuIndex = Math.min(items.length - 1, categoryMenuIndex + 1);
+        categoryMenuIndex = Math.min(maxIdx, Math.max(0, categoryMenuIndex) + 1);
         renderCategoryMenu();
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
@@ -406,15 +435,14 @@
         renderCategoryMenu();
       } else if (e.key === "Enter") {
         e.preventDefault();
-        const opts = filteredCategoryOptions();
         if (categoryMenuIndex <= 0 && !(els.categorySearch.value || "").trim()) {
-          setCategory("all");
+          clearCategories();
         } else if (categoryMenuIndex === 0) {
-          setCategory("all");
+          clearCategories();
         } else if (categoryMenuIndex > 0 && opts[categoryMenuIndex - 1]) {
-          setCategory(opts[categoryMenuIndex - 1]);
+          toggleCategory(opts[categoryMenuIndex - 1], { keepMenuOpen: true });
         } else if (opts.length === 1) {
-          setCategory(opts[0]);
+          toggleCategory(opts[0], { keepMenuOpen: true });
         }
       } else if (e.key === "Escape") {
         closeCategoryMenu();
@@ -422,7 +450,7 @@
       }
     });
 
-    els.categoryClear?.addEventListener("click", () => setCategory("all"));
+    els.categoryClear?.addEventListener("click", () => clearCategories());
 
     document.addEventListener("click", (e) => {
       if (!els.categoryCombo?.contains(e.target) && !els.categoryActive?.contains(e.target)) {
@@ -464,9 +492,17 @@
     const q = els.search.value.trim().toLowerCase();
     return sorted(
       repos.filter((r) => {
-        if (activeCategory !== "all") {
-          const ok = (r.categories || []).some((c) => c.toLowerCase() === activeCategory.toLowerCase());
-          if (!ok) return false;
+        if (activeCategories.size) {
+          const repoCats = new Set((r.categories || []).map((c) => String(c).toLowerCase()));
+          // OR: проект подходит, если есть хотя бы одна выбранная категория
+          let hit = false;
+          for (const key of activeCategories.keys()) {
+            if (repoCats.has(key)) {
+              hit = true;
+              break;
+            }
+          }
+          if (!hit) return false;
         }
         if (activeLanguage !== "all" && r.language !== activeLanguage) return false;
         if (!q) return true;
@@ -636,7 +672,7 @@
     const { categories, languages } = collectFilters(repos);
     categoryOptions = categories;
     renderCategoryActive();
-    if (els.categoryClear) els.categoryClear.hidden = activeCategory === "all";
+    if (els.categoryClear) els.categoryClear.hidden = activeCategories.size === 0;
     renderChips(els.languageChips, languages, activeLanguage, (v) => {
       activeLanguage = v;
       applyFilter({ resetPage: true });
