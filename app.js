@@ -4,6 +4,7 @@
   const THEME_KEY = "best-radar-theme";
   const CACHE_KEY = "best-radar-repos-v1";
   const TAG_RE = /#([\p{L}\p{N}_-]{2,40})/gu;
+  const PAGE_SIZE = 9;
 
   const els = {
     grid: document.getElementById("grid"),
@@ -21,6 +22,7 @@
     skeleton: document.getElementById("skeleton"),
     categoryChips: document.getElementById("category-chips"),
     languageChips: document.getElementById("language-chips"),
+    pager: document.getElementById("pager"),
     statusDot: document.getElementById("status-dot"),
     statProjects: document.getElementById("stat-projects"),
     statStars: document.getElementById("stat-stars"),
@@ -57,6 +59,7 @@
   let repos = [];
   let activeCategory = "all";
   let activeLanguage = "all";
+  let currentPage = 1;
 
   function currentTheme() {
     return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
@@ -354,7 +357,7 @@
           <div class="featured-metrics">
             <div class="metric"><span>${escapeHtml(plural(stars, "Звезда", "Звезды", "Звёзды"))}</span><strong>★ ${stars}</strong></div>
             <div class="metric"><span>${escapeHtml(plural(forks, "Форк", "Форки", "Форки"))}</span><strong>${forks}</strong></div>
-            <div class="metric"><span>Язык</span><strong>${escapeHtml(item.language || "—")}</strong></div>
+            <div class="metric"><span>Язык</span><strong>${escapeHtml(item.language || "-")}</strong></div>
             <div class="metric"><span>Обновлён</span><strong>${escapeHtml(formatDate(item.updated_at))}</strong></div>
           </div>
           <span class="btn btn-ghost" style="align-self:flex-start">Открыть репозиторий</span>
@@ -400,7 +403,41 @@
     });
   }
 
-  function applyFilter() {
+  function renderPager(totalPages) {
+    if (!els.pager) return;
+    if (totalPages <= 1) {
+      els.pager.hidden = true;
+      els.pager.innerHTML = "";
+      return;
+    }
+    els.pager.hidden = false;
+    const prevDisabled = currentPage <= 1;
+    const nextDisabled = currentPage >= totalPages;
+    let pagesHtml = "";
+    const windowSize = 5;
+    let start = Math.max(1, currentPage - Math.floor(windowSize / 2));
+    let end = Math.min(totalPages, start + windowSize - 1);
+    start = Math.max(1, end - windowSize + 1);
+    for (let p = start; p <= end; p++) {
+      pagesHtml += `<button type="button" class="pager-btn${p === currentPage ? " is-active" : ""}" data-page="${p}" aria-label="Страница ${p}" ${p === currentPage ? 'aria-current="page"' : ""}>${p}</button>`;
+    }
+    els.pager.innerHTML = `
+      <button type="button" class="pager-btn pager-nav" data-page="${currentPage - 1}" ${prevDisabled ? "disabled" : ""} aria-label="Предыдущая страница">←</button>
+      <div class="pager-pages">${pagesHtml}</div>
+      <button type="button" class="pager-btn pager-nav" data-page="${currentPage + 1}" ${nextDisabled ? "disabled" : ""} aria-label="Следующая страница">→</button>
+    `;
+    els.pager.querySelectorAll("[data-page]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const page = Number(btn.getAttribute("data-page"));
+        if (!page || page === currentPage || page < 1 || page > totalPages) return;
+        currentPage = page;
+        applyFilter({ resetPage: false, scrollToGrid: true });
+      });
+    });
+  }
+
+  function applyFilter({ resetPage = false, scrollToGrid = false } = {}) {
+    if (resetPage) currentPage = 1;
     const list = filtered();
     els.empty.hidden = true;
     els.error.hidden = true;
@@ -412,6 +449,10 @@
       els.grid.innerHTML = "";
       els.categoryChips.innerHTML = "";
       els.languageChips.innerHTML = "";
+      if (els.pager) {
+        els.pager.hidden = true;
+        els.pager.innerHTML = "";
+      }
       els.empty.hidden = false;
       els.empty.innerHTML = `<strong>Пока тихо на радаре</strong>Скоро здесь появятся новые крутые проекты.`;
       els.meta.textContent = countLabel(0, "проект", "проекта", "проектов");
@@ -428,16 +469,20 @@
     const { categories, languages } = collectFilters(repos);
     renderChips(els.categoryChips, categories, activeCategory, (v) => {
       activeCategory = v;
-      applyFilter();
+      applyFilter({ resetPage: true });
     }, "Все", true);
     renderChips(els.languageChips, languages, activeLanguage, (v) => {
       activeLanguage = v;
-      applyFilter();
+      applyFilter({ resetPage: true });
     }, "Все", false);
 
     if (!list.length) {
       els.featured.hidden = true;
       els.grid.innerHTML = "";
+      if (els.pager) {
+        els.pager.hidden = true;
+        els.pager.innerHTML = "";
+      }
       els.empty.hidden = false;
       els.empty.innerHTML = `<strong>Ничего не найдено</strong>Попробуйте другой запрос или сбросьте фильтры.`;
       els.meta.textContent = countLabel(0, "совпадение", "совпадения", "совпадений");
@@ -445,13 +490,29 @@
     }
 
     const [head, ...rest] = list;
+    const totalPages = Math.max(1, Math.ceil(rest.length / PAGE_SIZE) || 1);
+    if (currentPage > totalPages) currentPage = totalPages;
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const pageItems = rest.slice(start, start + PAGE_SIZE);
+
     renderFeatured(head);
-    renderCards(rest.length ? rest : []);
+    renderCards(pageItems);
     if (!rest.length) {
       els.grid.innerHTML = "";
+      renderPager(1);
+    } else {
+      renderPager(totalPages);
     }
 
-    els.meta.textContent = countLabel(list.length, "проект", "проекта", "проектов");
+    const pageNote =
+      rest.length > PAGE_SIZE
+        ? ` · стр. ${currentPage}/${totalPages}`
+        : "";
+    els.meta.textContent = `${countLabel(list.length, "проект", "проекта", "проектов")}${pageNote}`;
+
+    if (scrollToGrid && els.grid) {
+      els.grid.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
 
   async function load() {
@@ -527,7 +588,7 @@
         opt.setAttribute("aria-selected", on ? "true" : "false");
       });
       close();
-      applyFilter();
+      applyFilter({ resetPage: true });
     }
 
     trigger.addEventListener("click", (e) => {
@@ -556,7 +617,7 @@
   const qParam = params.get("q");
   if (qParam) els.search.value = qParam;
 
-  els.search.addEventListener("input", applyFilter);
+  els.search.addEventListener("input", () => applyFilter({ resetPage: true }));
   initCustomSelect();
 
   function initRadar() {
