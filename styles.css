@@ -1033,6 +1033,10 @@ html[data-theme="dark"] .select-menu {
   margin-bottom: 0.75rem;
 }
 
+.filter-row-cat {
+  align-items: center;
+}
+
 .filter-label {
   flex: 0 0 auto;
   margin-top: 0.45rem;
@@ -1042,10 +1046,176 @@ html[data-theme="dark"] .select-menu {
   min-width: 5.5rem;
 }
 
+.filter-row-cat .filter-label {
+  margin-top: 0;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+}
+
+.cat-picker {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.cat-combo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  padding: 0.35rem 0.7rem 0.35rem 0.85rem;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cat-combo:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--glass-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.cat-search-ico {
+  flex: 0 0 auto;
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.cat-combo input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.92rem;
+  padding: 0.35rem 0;
+}
+
+.cat-combo input::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.cat-clear {
+  appearance: none;
+  border: 0;
+  background: color-mix(in srgb, var(--muted) 16%, transparent);
+  color: var(--muted);
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cat-clear:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.cat-menu {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  margin: 0;
+  padding: 0.35rem;
+  list-style: none;
+  max-height: 260px;
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg-strong, var(--glass-bg));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--glass-shadow);
+}
+
+.cat-menu[hidden] {
+  display: none !important;
+}
+
+.cat-menu li {
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.cat-menu li:hover,
+.cat-menu li.is-active {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+.cat-menu li.is-empty {
+  cursor: default;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.cat-menu li.is-empty:hover {
+  background: transparent;
+  color: var(--muted);
+}
+
+.cat-active {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-height: 0;
+}
+
+.cat-active:empty {
+  display: none;
+}
+
+.cat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--glass-border));
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+  border-radius: 999px;
+  padding: 0.28rem 0.55rem 0.28rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.cat-pill button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  opacity: 0.75;
+  padding: 0 0.15rem;
+}
+
+.cat-pill button:hover {
+  opacity: 1;
 }
 
 .chip {
@@ -1095,8 +1265,8 @@ html[data-theme="dark"] .chip.is-active {
   border: 1px solid var(--border);
 }
 
-.featured {
-  margin: 1.25rem 0 1.35rem;
+.featured[hidden] {
+  display: none !important;
 }
 
 .featured-card {
@@ -1210,6 +1380,11 @@ html[data-theme="dark"] .featured-card:hover {
   grid-template-columns: 1.4fr 1fr 1fr;
   gap: 1rem;
   margin-bottom: 1rem;
+}
+
+.skeleton-grid[hidden],
+#skeleton[hidden] {
+  display: none !important;
 }
 
 .sk {

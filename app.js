@@ -2,7 +2,7 @@
   const USER = "best-radar";
   const EXCLUDE = new Set([USER, `${USER}.github.io`]);
   const THEME_KEY = "best-radar-theme";
-  const CACHE_KEY = "best-radar-repos-v1";
+  const CACHE_KEY = "best-radar-repos-v2";
   const TAG_RE = /#([\p{L}\p{N}_-]{2,40})/gu;
   const PAGE_SIZE = 9;
 
@@ -20,7 +20,11 @@
     themeToggle: document.getElementById("theme-toggle"),
     featured: document.getElementById("featured"),
     skeleton: document.getElementById("skeleton"),
-    categoryChips: document.getElementById("category-chips"),
+    categorySearch: document.getElementById("category-search"),
+    categoryMenu: document.getElementById("category-menu"),
+    categoryClear: document.getElementById("category-clear"),
+    categoryActive: document.getElementById("category-active"),
+    categoryCombo: document.getElementById("category-combo"),
     languageChips: document.getElementById("language-chips"),
     pager: document.getElementById("pager"),
     statusDot: document.getElementById("status-dot"),
@@ -33,6 +37,10 @@
     statCategoriesLabel: document.getElementById("stat-categories-label"),
     statLangsLabel: document.getElementById("stat-langs-label"),
   };
+
+  /** @type {string[]} */
+  let categoryOptions = [];
+  let categoryMenuIndex = -1;
 
   const LANG_COLORS = {
     JavaScript: "#f1e05a",
@@ -126,6 +134,17 @@
     return `${n} ${plural(n, one, few, many)}`;
   }
 
+  function isUsefulTag(raw) {
+    const t = String(raw || "").replace(/^#/, "").trim();
+    if (t.length < 2 || t.length > 40) return false;
+    if (t.startsWith("-")) return false;
+    if (/^-/.test(t)) return false;
+    if (/^\d+$/.test(t)) return false;
+    // TOC / markdown heading anchors like #-что-умеет
+    if (t.includes("--")) return false;
+    return true;
+  }
+
   function extractTags(...texts) {
     const map = new Map();
     for (const text of texts) {
@@ -134,6 +153,7 @@
       let m;
       while ((m = re.exec(text))) {
         const raw = m[1];
+        if (!isUsefulTag(raw)) continue;
         const key = raw.toLowerCase();
         if (!map.has(key)) map.set(key, raw);
       }
@@ -142,12 +162,15 @@
   }
 
   function normalizeTopics(topics) {
-    return (topics || []).map((t) => t.replace(/\s+/g, "-")).filter(Boolean);
+    return (topics || [])
+      .map((t) => String(t).replace(/\s+/g, "-"))
+      .filter((t) => isUsefulTag(t));
   }
 
   function uniqueTags(list) {
     const map = new Map();
     for (const t of list) {
+      if (!isUsefulTag(t)) continue;
       const key = String(t).toLowerCase();
       if (!map.has(key)) map.set(key, t);
     }
@@ -174,8 +197,13 @@
       });
       if (!res.ok) return [];
       const text = await res.text();
-      // Prefer tags near the top (first ~4k chars) for signal
-      return extractTags(text.slice(0, 4000));
+      // Only the leading hashtag line(s), not TOC anchors deeper in README
+      const head = text.split(/\r?\n/).slice(0, 8);
+      const tagLines = head.filter((line) => {
+        const hashes = line.match(/#/g);
+        return hashes && hashes.length >= 2 && !line.trim().startsWith("##");
+      });
+      return extractTags(tagLines.join("\n") || head.slice(0, 2).join("\n"));
     } catch {
       return [];
     }
@@ -209,7 +237,11 @@
   }
 
   function setLoading(on) {
-    els.skeleton.hidden = !on;
+    if (els.skeleton) {
+      els.skeleton.hidden = !on;
+      els.skeleton.setAttribute("aria-hidden", on ? "false" : "true");
+      els.skeleton.style.display = on ? "" : "none";
+    }
     els.statusDot.classList.toggle("is-loading", on);
     els.statusDot.classList.remove("is-error");
   }
@@ -262,6 +294,140 @@
       btn.textContent = asHash ? (value.startsWith("#") ? value : `#${value}`) : value;
       btn.addEventListener("click", () => onPick(value));
       container.appendChild(btn);
+    });
+  }
+
+  function closeCategoryMenu() {
+    if (!els.categoryMenu || !els.categorySearch) return;
+    els.categoryMenu.hidden = true;
+    els.categorySearch.setAttribute("aria-expanded", "false");
+    categoryMenuIndex = -1;
+  }
+
+  function openCategoryMenu() {
+    if (!els.categoryMenu || !els.categorySearch) return;
+    renderCategoryMenu();
+    els.categoryMenu.hidden = false;
+    els.categorySearch.setAttribute("aria-expanded", "true");
+  }
+
+  function setCategory(value, { resetPage = true } = {}) {
+    activeCategory = value || "all";
+    if (els.categoryClear) els.categoryClear.hidden = activeCategory === "all";
+    if (els.categorySearch && document.activeElement !== els.categorySearch) {
+      els.categorySearch.value = "";
+    }
+    renderCategoryActive();
+    closeCategoryMenu();
+    applyFilter({ resetPage });
+  }
+
+  function renderCategoryActive() {
+    if (!els.categoryActive) return;
+    els.categoryActive.innerHTML = "";
+    if (activeCategory === "all") return;
+    const pill = document.createElement("span");
+    pill.className = "cat-pill";
+    const label = activeCategory.startsWith("#") ? activeCategory : `#${activeCategory}`;
+    pill.innerHTML = `<span>${escapeHtml(label)}</span>`;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.setAttribute("aria-label", "Сбросить категорию");
+    btn.textContent = "×";
+    btn.addEventListener("click", () => setCategory("all"));
+    pill.appendChild(btn);
+    els.categoryActive.appendChild(pill);
+  }
+
+  function filteredCategoryOptions() {
+    const q = (els.categorySearch?.value || "").trim().toLowerCase().replace(/^#/, "");
+    const base = categoryOptions;
+    if (!q) return base;
+    return base.filter((c) => c.toLowerCase().includes(q));
+  }
+
+  function renderCategoryMenu() {
+    if (!els.categoryMenu) return;
+    const items = filteredCategoryOptions();
+    els.categoryMenu.innerHTML = "";
+
+    const allLi = document.createElement("li");
+    allLi.setAttribute("role", "option");
+    allLi.dataset.value = "all";
+    allLi.textContent = "Все категории";
+    if (activeCategory === "all") allLi.classList.add("is-active");
+    allLi.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      setCategory("all");
+    });
+    els.categoryMenu.appendChild(allLi);
+
+    if (!items.length) {
+      const empty = document.createElement("li");
+      empty.className = "is-empty";
+      empty.textContent = "Ничего не найдено";
+      els.categoryMenu.appendChild(empty);
+      return;
+    }
+
+    items.forEach((value, idx) => {
+      const li = document.createElement("li");
+      li.setAttribute("role", "option");
+      li.dataset.value = value;
+      li.textContent = value.startsWith("#") ? value : `#${value}`;
+      if (activeCategory.toLowerCase() === value.toLowerCase()) li.classList.add("is-active");
+      if (idx === categoryMenuIndex) li.classList.add("is-active");
+      li.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        setCategory(value);
+      });
+      els.categoryMenu.appendChild(li);
+    });
+  }
+
+  function initCategoryPicker() {
+    if (!els.categorySearch || !els.categoryMenu) return;
+
+    els.categorySearch.addEventListener("focus", () => openCategoryMenu());
+    els.categorySearch.addEventListener("input", () => {
+      categoryMenuIndex = -1;
+      openCategoryMenu();
+    });
+    els.categorySearch.addEventListener("keydown", (e) => {
+      const items = [...els.categoryMenu.querySelectorAll('[role="option"]')];
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        openCategoryMenu();
+        categoryMenuIndex = Math.min(items.length - 1, categoryMenuIndex + 1);
+        renderCategoryMenu();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        categoryMenuIndex = Math.max(0, categoryMenuIndex - 1);
+        renderCategoryMenu();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const opts = filteredCategoryOptions();
+        if (categoryMenuIndex <= 0 && !(els.categorySearch.value || "").trim()) {
+          setCategory("all");
+        } else if (categoryMenuIndex === 0) {
+          setCategory("all");
+        } else if (categoryMenuIndex > 0 && opts[categoryMenuIndex - 1]) {
+          setCategory(opts[categoryMenuIndex - 1]);
+        } else if (opts.length === 1) {
+          setCategory(opts[0]);
+        }
+      } else if (e.key === "Escape") {
+        closeCategoryMenu();
+        els.categorySearch.blur();
+      }
+    });
+
+    els.categoryClear?.addEventListener("click", () => setCategory("all"));
+
+    document.addEventListener("click", (e) => {
+      if (!els.categoryCombo?.contains(e.target) && !els.categoryActive?.contains(e.target)) {
+        closeCategoryMenu();
+      }
     });
   }
 
@@ -447,8 +613,9 @@
     if (!repos.length) {
       els.featured.hidden = true;
       els.grid.innerHTML = "";
-      els.categoryChips.innerHTML = "";
-      els.languageChips.innerHTML = "";
+      categoryOptions = [];
+      if (els.categoryActive) els.categoryActive.innerHTML = "";
+      if (els.languageChips) els.languageChips.innerHTML = "";
       if (els.pager) {
         els.pager.hidden = true;
         els.pager.innerHTML = "";
@@ -467,10 +634,9 @@
     });
 
     const { categories, languages } = collectFilters(repos);
-    renderChips(els.categoryChips, categories, activeCategory, (v) => {
-      activeCategory = v;
-      applyFilter({ resetPage: true });
-    }, "Все", true);
+    categoryOptions = categories;
+    renderCategoryActive();
+    if (els.categoryClear) els.categoryClear.hidden = activeCategory === "all";
     renderChips(els.languageChips, languages, activeLanguage, (v) => {
       activeLanguage = v;
       applyFilter({ resetPage: true });
@@ -619,6 +785,7 @@
 
   els.search.addEventListener("input", () => applyFilter({ resetPage: true }));
   initCustomSelect();
+  initCategoryPicker();
 
   function initRadar() {
     const canvas = document.getElementById("radar-canvas");
