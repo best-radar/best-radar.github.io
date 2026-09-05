@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://best-radar.github.io/sitemap.xml
+
+Host: https://best-radar.github.io
