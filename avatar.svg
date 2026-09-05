@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="64" y1="32" x2="448" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1f6feb"/>
+      <stop offset="1" stop-color="#0550ae"/>
+    </linearGradient>
+    <linearGradient id="sweep" x1="256" y1="256" x2="432" y2="144" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7ee787" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#7ee787" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="blipGlow" cx="352" cy="176" r="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffd33d" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#ffd33d" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- Full-bleed square for GitHub circular crop -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="176" stroke="#ffffff" stroke-opacity="0.22" stroke-width="10"/>
+  <circle cx="256" cy="256" r="120" stroke="#ffffff" stroke-opacity="0.35" stroke-width="10"/>
+  <circle cx="256" cy="256" r="64" stroke="#ffffff" stroke-opacity="0.5" stroke-width="10"/>
+  <path d="M256 256 L416 144 A176 176 0 0 0 256 80 Z" fill="url(#sweep)" opacity="0.92"/>
+  <circle cx="256" cy="256" r="22" fill="#ffffff"/>
+  <circle cx="352" cy="176" r="48" fill="url(#blipGlow)"/>
+  <circle cx="352" cy="176" r="24" fill="#ffd33d"/>
+  <circle cx="184" cy="320" r="16" fill="#7ee787"/>
+</svg>
